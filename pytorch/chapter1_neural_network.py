@@ -2,79 +2,36 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+import numpy as np
+print(torch.version.cuda)
+
+# N is batch size; D_in is input dimension;
+# H is hidden dimension; D_out is output dimension.
+N, D_in, H, D_out = 64, 1000, 100, 10
+
+# creat random input and output data
+x = np.random.randn(N, D_in)
+y = np.random.randn(N, D_out)
+print(x,y)
+# randomly initialize weights
+w1 = np.random.randn(D_in, H)
+w2 = np.random.randn(H, D_out)
+
+learning_rate = 1e-6
+for t in range(500):
+    h = x.dot(w1)
+    h_relu = np.maximum(h, 0)
+    y_pred = h_relu.dot(w2)
+    loss = np.square(y_pred - y).sum()
+    print(t, loss)
+    grad_y_pred = 2.0 * (y_pred - y)
+    grad_w2 = h_relu.T.dot(grad_y_pred)
+    grad_h_relu = grad_y_pred.dot(w2.T)
+    grad_h = grad_h_relu.copy()
+    grad_h[h < 0] = 0
+    grad_w1 = x.T.dot(grad_h)
+    # 更新权值
+    w1 -= learning_rate * grad_w1
+    w2 -= learning_rate * grad_w2
 
 
-class Net(nn.Module):
-    def __init__(self):
-        super(Net, self).__init__()
-        # kernel
-        self.conv1 = nn.Conv2d(1, 6, 5)
-        self.conv2 = nn.Conv2d(6, 16, 5)
-        # an affine operation
-        self.fc1 = nn.Linear(16 * 5 * 5, 120)
-        self.fc2 = nn.Linear(120, 84)
-        self.fc3 = nn.Linear(84, 10)
-
-    def forward(self, x):
-        # Max pooling over a (2, 2) window
-        x = F.max_pool2d(F.relu(self.conv1(x)), (2, 2))
-        # If the size is a square you can only specify a single number
-        x = F.max_pool2d(F.relu(self.conv2(x)), 2)
-        x = x.view(-1, self.num_flat_features(x))
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = self.fc3(x)
-        return x
-
-    def num_flat_features(self, x):
-        size = x.size()[1:]  # all dimensions except the batch dimension
-        num_features = 1
-        for s in size:
-            num_features *= s
-        return num_features
-
-
-net = Net()
-print(net)
-params = list(net.parameters())
-print(len(params))
-print(params[0].size())  # conv1's .weight
-input = torch.randn(1, 1, 32, 32)
-out = net(input)
-print(out)
-net.zero_grad()
-out.backward(torch.randn(1, 10))
-
-output = net(input)
-target = torch.randn(10)  # 随机值作为样例
-target = target.view(1, -1)  # 使target和output的shape相同
-criterion = nn.MSELoss()
-
-loss = criterion(output, target)
-print(loss)
-print(loss.grad_fn)  # MSELoss
-print(loss.grad_fn.next_functions[0][0])  # Linear
-print(loss.grad_fn.next_functions[0][0].next_functions[0][0])  # ReLU
-net.zero_grad()  # 清除梯度
-
-print('conv1.bias.grad before backward')
-print(net.conv1.bias.grad)
-
-loss.backward()
-
-print('conv1.bias.grad after backward')
-print(net.conv1.bias.grad)
-learning_rate = 0.01
-for f in net.parameters():
-    f.data.sub_(f.grad.data * learning_rate)
-import torch.optim as optim
-
-# create your optimizer
-optimizer = optim.SGD(net.parameters(), lr=0.01)
-
-# in your training loop:
-optimizer.zero_grad()   # zero the gradient buffers
-output = net(input)
-loss = criterion(output, target)
-loss.backward()
-optimizer.step()    # Does the update
